@@ -33,3 +33,16 @@ for param in parameters_methods_list:
         print(f"method DELETE with parameter data={param} has result with status code {result.status_code} and body {result.text}")
 
 #Answer: method DELETE with parameter data={'method': 'GET'} has result with status code 200 and body {"success":"!"}
+
+# ===================Code with the same result
+data_methods_list = ["GET", "POST", "PUT", "DELETE"]
+parameters_methods_list = ["GET", "POST", "PUT", "DELETE"]
+
+for i in data_methods_list:
+    for param in parameters_methods_list:
+        if i == "GET" and param != "GET":
+            result = requests.request(f"{i}", "https://playground.learnqa.ru/ajax/api/compare_query_type", params={"method": {param}})
+            print(f"{i} method with parameter data = {param} has result with status code {result.status_code} and body {result.text}")
+        elif i != param:
+            result = requests.request(f"{i}", "https://playground.learnqa.ru/ajax/api/compare_query_type", data={"method": {param}})
+            print(f"{i} method with parameter data = {param} has result with status code {result.status_code} and body {result.text}")
