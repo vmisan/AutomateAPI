@@ -6,33 +6,15 @@ import time
 
 class TestUserEdit(BaseCase):
     def test_edit_just_created_user(self):
-        # REGISTRATION
-        register_data = self.prepare_registration_data()
-        response1 = MyRequests.post("/user/", data=register_data)
+        user = self.register()
 
-        Assertions.assert_code_status(response1, 200)
-        Assertions.assert_json_has_key(response1, "id")
-
-        email = register_data['email']
-        first_name = register_data['firstName']
-        password = register_data['password']
-        user_id = self.get_json_value(response1, "id")
-
-        # LOGIN
-        login_data = {
-            'email': email,
-            'password': password
-        }
-        response2 = MyRequests.post("/user/login", data=login_data)
-
-        auth_sid = self.get_cookie(response2, "auth_sid")
-        token = self.get_header(response2, "x-csrf-token")
+        auth_sid, token = self.login(user.email, user.password)
 
         # EDIT
         new_name = "Changed Name"
 
         response3 = MyRequests.put(
-            f"/user/{user_id}",
+            f"/user/{user.user_id}",
             headers={"x-csrf-token": token},
             cookies={"auth_sid": auth_sid},
             data={"firstName": new_name}
@@ -42,7 +24,7 @@ class TestUserEdit(BaseCase):
 
         # GET
         response4 = MyRequests.get(
-            f"/user/{user_id}",
+            f"/user/{user.user_id}",
             headers={"x-csrf-token": token},
             cookies={"auth_sid": auth_sid},
         )
@@ -51,28 +33,18 @@ class TestUserEdit(BaseCase):
             response4,
             "firstName",
             new_name,
-            f"Wrong name of the user after edit. Actual value: {first_name}. Expected value: {new_name}"
+            f"Wrong name of the user after edit. Actual value: {user.first_name}. Expected value: {new_name}"
         )
 
     # Попытаемся изменить данные пользователя, будучи неавторизованными
     def test_edit_by_unauthorized_user(self):
-        # REGISTRATION
-        register_data = self.prepare_registration_data()
-        response1 = MyRequests.post("/user/", data=register_data)
-
-        Assertions.assert_code_status(response1, 200)
-        Assertions.assert_json_has_key(response1, "id")
-
-        email = register_data['email']
-        first_name = register_data['firstName']
-        password = register_data['password']
-        user_id = self.get_json_value(response1, "id")
+        user = self.register()
 
         # EDIT
         new_lastname = "Changed Last Name"
 
         response = MyRequests.put(
-            f"/user/{user_id}",
+            f"/user/{user.user_id}",
             data={"lastName": new_lastname}
         )
 
@@ -82,54 +54,27 @@ class TestUserEdit(BaseCase):
     #     - Попытаемся изменить данные пользователя, будучи авторизованными другим пользователем
     def test_user_cannot_edit_another_user_data(self):
         # REGISTRATION of the FIRST USER
-        register_data1 = self.prepare_registration_data()
-        response1 = MyRequests.post("/user/", data=register_data1)
+        user1 = self.register()
 
-        Assertions.assert_code_status(response1, 200)
-        Assertions.assert_json_has_key(response1, "id")
-
-        email1 = register_data1['email']
-        password1 = register_data1['password']
 
         time.sleep(2) # Wait 2 seconds in order to get different email
 
         # REGISTRATION of the SECOND USER
-        register_data2 = self.prepare_registration_data()
-        response2 = MyRequests.post("/user/", data=register_data2)
-
-        Assertions.assert_code_status(response2, 200)
-        Assertions.assert_json_has_key(response2, "id")
-
-        email2 = register_data2['email']
-        username2 = register_data2['username']
-        password2 = register_data2['password']
-        user_id2 = self.get_json_value(response2, "id")
+        user2 = self.register()
 
         # LOGIN as the FIRST USER
-        login_data = {
-            'email': email1,
-            'password': password1
-        }
-        response3 = MyRequests.post("/user/login", data=login_data)
+        auth_sid, token = self.login(user1.email, user1.password)
 
-        auth_sid = self.get_cookie(response3, "auth_sid")
-        token = self.get_header(response3, "x-csrf-token")
 
         # LOGIN as the SECOND USER
-        login_data2 = {
-            'email': email2,
-            'password': password2
-        }
-        response4 = MyRequests.post("/user/login", data=login_data2)
+        auth_sid2, token2 = self.login(user2.email, user2.password)
 
-        auth_sid2 = self.get_cookie(response4, "auth_sid")
-        token2 = self.get_header(response4, "x-csrf-token")
 
         # THE FIRST USER TRIES TO EDIT THE SECOND USER' DATA
         new_username = "Changed Username"
 
         response5 = MyRequests.put(
-            f"/user/{user_id2}",
+            f"/user/{user2.user_id}",
             headers={"x-csrf-token": token},
             cookies={"auth_sid": auth_sid},
             data={"lastName": new_username}
@@ -144,7 +89,7 @@ class TestUserEdit(BaseCase):
 
         # GET DATA OF THE SECOND USER AFTER EDIT
         response6 = MyRequests.get(
-            f"/user/{user_id2}",
+            f"/user/{user2.user_id}",
             headers={"x-csrf-token": token2},
             cookies={"auth_sid": auth_sid2},
         )
@@ -154,38 +99,20 @@ class TestUserEdit(BaseCase):
         print(response_data["username"])
 
         Assertions.assert_code_status(response6, 200)
-        assert response_data["username"] == username2, \
-            f"User changed another user data. Actual result: {response_data['username']}. Expected result:{username2}"
+        assert response_data["username"] == user2.username, \
+            f"User changed another user data. Actual result: {response_data['username']}. Expected result:{user2.username}"
 
 
     # - Попытаемся изменить email пользователя, будучи авторизованными тем же пользователем, на новый email без символа @
     def test_edit_email_without_dog(self):
-        # REGISTRATION
-        register_data = self.prepare_registration_data()
-        response7 = MyRequests.post("/user/", data=register_data)
-
-        Assertions.assert_code_status(response7, 200)
-        Assertions.assert_json_has_key(response7, "id")
-
-        email = register_data['email']
-        password = register_data['password']
-        user_id = self.get_json_value(response7, "id")
-
-        # LOGIN
-        login_data = {
-            'email': email,
-            'password': password
-        }
-        response8 = MyRequests.post("/user/login", data=login_data)
-
-        auth_sid = self.get_cookie(response8, "auth_sid")
-        token = self.get_header(response8, "x-csrf-token")
+        user = self.register()
+        auth_sid, token = self.login(user.email, user.password)
 
         # EDIT
         new_email = "learnqaexample.com"
 
         response9 = MyRequests.put(
-            f"/user/{user_id}",
+            f"/user/{user.user_id}",
             headers={"x-csrf-token": token},
             cookies={"auth_sid": auth_sid},
             data={"firstName": new_email}
@@ -195,45 +122,28 @@ class TestUserEdit(BaseCase):
 
         # GET DATA AFTER EDIT
         response10 = MyRequests.get(
-            f"/user/{user_id}",
+            f"/user/{user.user_id}",
             headers={"x-csrf-token": token},
             cookies={"auth_sid": auth_sid},
         )
 
         response_data = response10.json()
-        assert response_data["email"] == email, f"User changed email to incorrect one. Actual result: {response_data['email']}. Expected result:{email}" 
+        assert response_data["email"] == user.email, f"User changed email to incorrect one. Actual result: {response_data['email']}. Expected result:{user.email}"
         Assertions.assert_code_status(response10, 200)
 
 
 
     # - Попытаемся изменить firstName пользователя, будучи авторизованными тем же пользователем, на очень короткое значение в один символ
     def test_edit_firstname_to_one_character_value(self):
-        # REGISTRATION
-        register_data = self.prepare_registration_data()
-        response1 = MyRequests.post("/user/", data=register_data)
+        user = self.register()
 
-        Assertions.assert_code_status(response1, 200)
-        Assertions.assert_json_has_key(response1, "id")
-
-        email = register_data['email']
-        password = register_data['password']
-        user_id = self.get_json_value(response1, "id")
-
-        # LOGIN
-        login_data = {
-            'email': email,
-            'password': password
-        }
-        response2 = MyRequests.post("/user/login", data=login_data)
-
-        auth_sid = self.get_cookie(response2, "auth_sid")
-        token = self.get_header(response2, "x-csrf-token")
+        auth_sid, token = self.login(user.email, user.password)
 
         # EDIT
         new_name = "a"
 
         response3 = MyRequests.put(
-            f"/user/{user_id}",
+            f"/user/{user.user_id}",
             headers={"x-csrf-token": token},
             cookies={"auth_sid": auth_sid},
             data={"firstName": new_name}
@@ -244,7 +154,7 @@ class TestUserEdit(BaseCase):
 
         # GET DATA AFTER EDIT
         response4 = MyRequests.get(
-            f"/user/{user_id}",
+            f"/user/{user.user_id}",
             headers={"x-csrf-token": token},
             cookies={"auth_sid": auth_sid},
         )
@@ -252,8 +162,8 @@ class TestUserEdit(BaseCase):
         print(response4.status_code)
         parsed_response = response4.json()
         print(parsed_response['firstName'])
-        assert parsed_response["firstName"] == register_data['firstName'], \
-            f"Incorrect first name. First name is changed to too short value '{new_name}'. Expected result:{register_data['firstName']}"
+        assert parsed_response["firstName"] == user.first_name, \
+            f"Incorrect first name. First name is changed to too short value '{new_name}'. Expected result:{user.first_name}"
 
 
 
